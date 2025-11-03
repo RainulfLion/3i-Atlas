@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3I/ATLAS Solar System Path - Accurate Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        #canvas {
+            border: 2px solid #333;
+            background: radial-gradient(circle at center, #0a0a1a 0%, #000000 100%);
+            box-shadow: 0 0 30px rgba(100, 150, 255, 0.3);
+            cursor: grab;
+        }
+        
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #1a4d8f;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #2563b8;
+        }
+        
+        button:disabled {
+            background: #333;
+            cursor: not-allowed;
+        }
+        
+        .info {
+            margin-top: 20px;
+            text-align: center;
+            max-width: 900px;
+            line-height: 1.6;
+        }
+        
+        .date-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4a9eff;
+            margin-bottom: 10px;
+        }
+        
+        .event-display {
+            font-size: 16px;
+            color: #ffaa44;
+            min-height: 24px;
+        }
+        
+        .legend {
+            margin-top: 15px;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+        
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        input[type="range"] {
+            width: 150px;
+        }
+        
+        .accuracy-note {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(74, 158, 255, 0.1);
+            border-radius: 5px;
+            font-size: 13px;
+            color: #8ac7ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>3I/ATLAS Journey Through the Solar System</h1>
+    <div class="accuracy-note">
+        ✨ Using real orbital elements from JPL for accurate planetary and comet positions
+    </div>
+    <canvas id="canvas" width="1000" height="1000"></canvas>
+    
+    <div class="info">
+        <div class="date-display" id="dateDisplay">July 1, 2025</div>
+        <div class="event-display" id="eventDisplay">Discovery by ATLAS telescope</div>
+    </div>
+    
+    <div class="controls">
+        <button id="playPause">Pause</button>
+        <button id="reset">Reset</button>
+        <div class="speed-control">
+            <label>Speed:</label>
+            <input type="range" id="speedSlider" min="1" max="10" value="5">
+            <span id="speedValue">5x</span>
+        </div>
+        <div class="speed-control">
+            <label>Zoom:</label>
+            <button id="zoomOut">-</button>
+            <span id="zoomValue">1.0x</span>
+            <button id="zoomIn">+</button>
+            <button id="zoomReset">Reset View</button>
+        </div>
+    </div>
+    
+    <div class="controls" style="width: 800px; max-width: 90%;">
+        <div style="width: 100%;">
+            <label style="display: block; margin-bottom: 5px;">Timeline:</label>
+            <input type="range" id="timeSlider" min="0" max="100" value="0" style="width: 100%;">
+        </div>
+    </div>
+    
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ffff00;"></div>
+            <span>Sun</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #888888;"></div>
+            <span>Mercury</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ffd700;"></div>
+            <span>Venus</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #4169e1;"></div>
+            <span>Earth</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ff4500;"></div>
+            <span>Mars</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #daa520;"></div>
+            <span>Jupiter</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #00ffff;"></div>
+            <span>3I/ATLAS</span>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        
+        let isPlaying = true;
+        let animationSpeed = 5;
+        
+        // Zoom and pan variables
+        let zoomLevel = 1.0;
+        let panX = 0;
+        let panY = 0;
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        
+        // Time settings
+        const startDate = new Date('2025-06-30T00:00:00Z');
+        const endDate = new Date('2026-04-01T00:00:00Z');
+        let currentTime = 0; // days since start
+        const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+        
+        // Constants
+        const J2000 = 2451545.0;
+        const AU = 90;  // pixels per AU
+        
+        // Orbital elements for planets (J2000, from JPL)
+        const planets = [
+            { 
+                name: 'Mercury', 
+                a: 0.38709927, e: 0.20563593, i: 7.00497902,
+                L0: 252.25032350, w: 77.45779628, O: 48.33076593,
+                dL: 149472.67411175,
+                color: '#888888', size: 4
+            },
+            { 
+                name: 'Venus', 
+                a: 0.72333566, e: 0.00677672, i: 3.39467605,
+                L0: 181.97909950, w: 131.60246718, O: 76.67984255,
+                dL: 58517.81538729,
+                color: '#ffd700', size: 6
+            },
+            { 
+                name: 'Earth', 
+                a: 1.00000261, e: 0.01671123, i: -0.00001531,
+                L0: 100.46457166, w: 102.93768193, O: 0.0,
+                dL: 35999.37244981,
+                color: '#4169e1', size: 6
+            },
+            { 
+                name: 'Mars', 
+                a: 1.52371034, e: 0.09339410, i: 1.84969142,
+                L0: -4.55343205, w: -23.94362959, O: 49.55953891,
+                dL: 19140.30268499,
+                color: '#ff4500', size: 5
+            },
+            { 
+                name: 'Jupiter', 
+                a: 5.20288700, e: 0.04838624, i: 1.30439695,
+                L0: 34.39644051, w: 14.72847983, O: 100.47390909,
+                dL: 3034.74612775,
+                color: '#daa520', size: 15
+            }
+        ];
+        
+        // 3I/ATLAS orbital elements (JPL)
+        const atlas = {
+            q: 1.3563, e: 6.1386,
+            i: 175.113 * Math.PI / 180,
+            Omega: 322.156 * Math.PI / 180,
+            omega: 128.011 * Math.PI / 180,
+            T: new Date('2025-10-29T11:47:00Z')
+        };
+        
+        const events = [
+            { date: new Date('2025-07-01'), text: 'Discovery by ATLAS telescope' },
+            { date: new Date('2025-10-03'), text: 'Closest approach to Mars (28 million km)' },
+            { date: new Date('2025-10-29'), text: 'Perihelion - Closest to Sun (1.36 AU)' },
+            { date: new Date('2025-12-19'), text: 'Closest approach to Earth (1.8 AU)' },
+            { date: new Date('2026-03-16'), text: 'Passing Jupiter (50 million km)' }
+        ];
+        
+        const trailPoints = [];
+        const maxTrailPoints = 400;
+        
+        // Convert date to Julian Date
+        function toJD(date) {
+            return (date.getTime() / 86400000.0) + 2440587.5;
+        }
+        
+        // Solve Kepler for hyperbolic orbit
+        function solveKeplerHyp(M, e) {
+            let H = M;
+            for (let i = 0; i < 30; i++) {
+                const f = e * Math.sinh(H) - H - M;
+                const fp = e * Math.cosh(H) - 1;
+                H -= f / fp;
+                if (Math.abs(f/fp) < 1e-8) break;
+            }
+            return H;
+        }
+        
+        // Get comet position (heliocentric XY in pixels)
+        function getCometPos(days) {
+            const date = new Date(startDate.getTime() + days * 86400000);
+            const jd = toJD(date);
+            const jd_T = toJD(atlas.T);
+            const t = jd - jd_T; // days since perihelion
+            
+            // Mean motion for hyperbolic orbit
+            const a = atlas.q / (1 - atlas.e);
+            const n = 0.01720209895 / Math.sqrt(Math.abs(a * a * a)); // radians/day
+            const M = n * t;
+            
+            // Hyperbolic anomaly
+            const H = solveKeplerHyp(M, atlas.e);
+            
+            // True anomaly
+            const nu = 2 * Math.atan(Math.sqrt((atlas.e + 1) / (atlas.e - 1)) * Math.tanh(H / 2));
+            
+            // Distance
+            const r = atlas.q * (1 + atlas.e) / (1 + atlas.e * Math.cos(nu));
+            
+            // Position in orbital plane
+            const x_orb = r * Math.cos(nu);
+            const y_orb = r * Math.sin(nu);
+            
+            // Rotation matrices
+            const cos_w = Math.cos(atlas.omega);
+            const sin_w = Math.sin(atlas.omega);
+            const cos_i = Math.cos(atlas.i);
+            const sin_i = Math.sin(atlas.i);
+            const cos_O = Math.cos(atlas.Omega);
+            const sin_O = Math.sin(atlas.Omega);
+            
+            // Transform to ecliptic coordinates
+            const x = (cos_w * cos_O - sin_w * sin_O * cos_i) * x_orb + 
+                      (-sin_w * cos_O - cos_w * sin_O * cos_i) * y_orb;
+            const y = (cos_w * sin_O + sin_w * cos_O * cos_i) * x_orb + 
+                      (-sin_w * sin_O + cos_w * cos_O * cos_i) * y_orb;
+            
+            return { x: x * AU, y: -y * AU };
+        }
+        
+        // Get planet position (heliocentric XY in pixels)
+        function getPlanetPos(p, days) {
+            const date = new Date(startDate.getTime() + days * 86400000);
+            const jd = toJD(date);
+            const T = (jd - J2000) / 36525.0; // centuries from J2000
+            
+            // Mean longitude
+            const L = (p.L0 + p.dL * T) * Math.PI / 180;
+            const w_bar = p.w * Math.PI / 180;
+            const M = L - w_bar; // mean anomaly
+            
+            // Solve Kepler (elliptical)
+            let E = M;
+            for (let i = 0; i < 10; i++) {
+                E = M + p.e * Math.sin(E);
+            }
+            
+            // True anomaly
+            const nu = 2 * Math.atan2(
+                Math.sqrt(1 + p.e) * Math.sin(E / 2),
+                Math.sqrt(1 - p.e) * Math.cos(E / 2)
+            );
+            
+            // Distance
+            const r = p.a * (1 - p.e * p.e) / (1 + p.e * Math.cos(nu));
+            
+            // Heliocentric longitude in orbit
+            const theta = nu + w_bar;
+            
+            // Simple 2D projection (ignoring inclination for visualization)
+            const x = r * Math.cos(theta);
+            const y = r * Math.sin(theta);
+            
+            return { x: x * AU, y: -y * AU };
+        }
+        
+        function drawOrbit(r) {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, r * AU, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([]);
+            ctx.stroke();
+        }
+        
+        function drawPlanet(x, y, size, color, name) {
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.font = '11px Arial';
+            ctx.fillText(name, x + size + 5, y + 4);
+        }
+        
+        function drawComet(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#00ffff';
+            ctx.fill();
+            const gradient = ctx.createRadialGradient(x, y, 5, x, y, 20);
+            gradient.addColorStop(0, 'rgba(0, 255, 255, 0.8)');
+            gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(x, y, 20, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#00ffff';
+            ctx.font = 'bold 12px Arial';
+            ctx.fillText('3I/ATLAS', x + 15, y - 15);
+        }
+        
+        function drawSun() {
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 15, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffff00';
+            ctx.fill();
+            const gradient = ctx.createRadialGradient(centerX, centerY, 15, centerX, centerY, 40);
+            gradient.addColorStop(0, 'rgba(255, 255, 0, 0.5)');
+            gradient.addColorStop(1, 'rgba(255, 255, 0, 0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 40, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        function getCurrentEvent() {
+            const currentDate = new Date(startDate.getTime() + currentTime * 86400000);
+            for (let event of events) {
+                const diff = Math.abs((currentDate - event.date) / 86400000);
+                if (diff < 3) return event.text;
+            }
+            return '';
+        }
+        
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(centerX + panX, centerY + panY);
+            ctx.scale(zoomLevel, zoomLevel);
+            ctx.translate(-centerX, -centerY);
+            
+            // Draw orbits
+            planets.forEach(p => drawOrbit(p.a));
+            
+            // Draw trail
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            trailPoints.forEach((pt, i) => {
+                if (i === 0) ctx.moveTo(centerX + pt.x, centerY + pt.y);
+                else ctx.lineTo(centerX + pt.x, centerY + pt.y);
+            });
+            ctx.stroke();
+            
+            drawSun();
+            
+            // Draw planets
+            planets.forEach(p => {
+                const pos = getPlanetPos(p, currentTime);
+                drawPlanet(centerX + pos.x, centerY + pos.y, p.size, p.color, p.name);
+            });
+            
+            // Draw comet
+            const cometPos = getCometPos(currentTime);
+            drawComet(centerX + cometPos.x, centerY + cometPos.y);
+            
+            ctx.restore();
+            
+            // Update trail
+            trailPoints.push(cometPos);
+            if (trailPoints.length > maxTrailPoints) trailPoints.shift();
+            
+            // Update display
+            const currentDate = new Date(startDate.getTime() + currentTime * 86400000);
+            document.getElementById('dateDisplay').textContent = currentDate.toLocaleDateString('en-US', {
+                year: 'numeric', month: 'long', day: 'numeric'
+            });
+            document.getElementById('eventDisplay').textContent = getCurrentEvent();
+        }
+        
+        // Animation loop
+        function animate() {
+            if (isPlaying) {
+                currentTime += animationSpeed * 0.5;
+                if (currentTime >= totalDays) {
+                    currentTime = totalDays;
+                    isPlaying = false;
+                    document.getElementById('playPause').textContent = 'Play';
+                }
+                const pct = (currentTime / totalDays) * 100;
+                document.getElementById('timeSlider').value = pct;
+            }
+            draw();
+            requestAnimationFrame(animate);
+        }
+        
+        // Controls
+        document.getElementById('playPause').addEventListener('click', function() {
+            isPlaying = !isPlaying;
+            this.textContent = isPlaying ? 'Pause' : 'Play';
+            if (currentTime >= totalDays) {
+                currentTime = 0;
+                trailPoints.length = 0;
+            }
+        });
+        
+        document.getElementById('reset').addEventListener('click', function() {
+            currentTime = 0;
+            trailPoints.length = 0;
+            isPlaying = false;
+            document.getElementById('playPause').textContent = 'Play';
+            draw();
+        });
+        
+        document.getElementById('speedSlider').addEventListener('input', function() {
+            animationSpeed = parseInt(this.value);
+            document.getElementById('speedValue').textContent = animationSpeed + 'x';
+        });
+        
+        document.getElementById('timeSlider').addEventListener('input', function() {
+            const pct = parseInt(this.value) / 100;
+            currentTime = pct * totalDays;
+            trailPoints.length = 0;
+            const step = Math.max(1, Math.floor(currentTime / maxTrailPoints));
+            for (let t = 0; t <= currentTime; t += step) {
+                trailPoints.push(getCometPos(t));
+            }
+            draw();
+        });
+        
+        document.getElementById('zoomIn').addEventListener('click', function() {
+            zoomLevel = Math.min(zoomLevel * 1.3, 10);
+            document.getElementById('zoomValue').textContent = zoomLevel.toFixed(1) + 'x';
+            draw();
+        });
+        
+        document.getElementById('zoomOut').addEventListener('click', function() {
+            zoomLevel = Math.max(zoomLevel / 1.3, 0.3);
+            document.getElementById('zoomValue').textContent = zoomLevel.toFixed(1) + 'x';
+            draw();
+        });
+        
+        document.getElementById('zoomReset').addEventListener('click', function() {
+            zoomLevel = 1.0;
+            panX = 0;
+            panY = 0;
+            document.getElementById('zoomValue').textContent = '1.0x';
+            draw();
+        });
+        
+        canvas.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            zoomLevel = Math.max(0.3, Math.min(10, zoomLevel * (e.deltaY > 0 ? 0.9 : 1.1)));
+            document.getElementById('zoomValue').textContent = zoomLevel.toFixed(1) + 'x';
+            draw();
+        });
+        
+        canvas.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            canvas.style.cursor = 'grabbing';
+        });
+        
+        canvas.addEventListener('mousemove', function(e) {
+            if (isDragging) {
+                panX += e.clientX - lastMouseX;
+                panY += e.clientY - lastMouseY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                draw();
+            }
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+            canvas.style.cursor = 'grab';
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+            canvas.style.cursor = 'grab';
+        });
+        
+        animate();
+    </script>
+</body>
+</html>
